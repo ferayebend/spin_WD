@@ -46,7 +46,7 @@ M_ch = 1.435*M_sun*(2.d0/mmw)**2,    & ! Chandrasekhar mass
                      !
 alpha = 1.25d0,     &  ! power-law index of the accretion rate
 					 !
-tMAX = 1.0d5*year,	 &    ! where to stop computing in time
+tMAX = 1.0d8*year,	 &    ! where to stop computing in time
 				     !
 ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
@@ -79,11 +79,11 @@ SUBROUTINE initialize
 
 t = 0.d0
 
-dt = 1.d-6 ! seconds
+dt = 1.d6 ! seconds
 
 B_star = 1.d8  ! Gauss, initial magnetic field
 
-M_0 = 1d-1*M_sun  ! initial mass of the disk
+M_0 = 3d-1*M_sun  ! initial mass of the disk
 
 j_0 = 1.0d20 ! initial average specific angular momentum
 
