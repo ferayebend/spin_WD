@@ -19,6 +19,7 @@ PI = 3.141592654d0,    &
 G = 6.67259d-8,        &   ! gravitational constant	(dyne.cm^2/s)
 M_sun = 1.989d33,      &   ! mass of the Sun   ( g )
 R_sun = 6.96d10,       &   ! radius of the Sun (cm)
+L_sun = 3.839e33,      &   ! luminosity of the Sun (erg/s)
 c = 2.99792458d10,     &   ! speed of light	  (cm/s)
 k = 1.3806513d-16,     &   ! Boltzmann's constant (erg/K)
 m_p = 1.6725231d-24,   &   ! Mass of proton	  (g)
@@ -29,7 +30,9 @@ day = 8.64d4,          &   ! 1 day is 86400 seconds
 week = 7.d0*day,       &   !
 month = 30.d0*day,     &   ! convert time units to seconds
 year = 365.25d0*day,   &   !
-km = 1.d5                  ! km in cm's
+km = 1.d5,             &   ! km in cm's
+C = 5.75d5*3.45,       &   ! constant for Mestel cooling (erg/s/M_solar)
+mu = 1.660538d-24      &   ! atomic mass unit (g)
 
 end module Natural_Constants
 !***************************************************
@@ -66,7 +69,8 @@ real(kind=double), public:: t, Omega, dt,      &
  Mdot, W_kep, f, R_A, mu, M_star,              &
  torque_disk, torque_dip, torque,              &
  R_in, R_LC, R_co, w_s, period, jdot,          &
- R_star, L_disk, L_acc, B_star
+ R_star, L_disk, L_acc, B_star, L_0,	       &
+ L, dL, T_0
 
  
 real(kind=double), public:: Mdot_0, t_0, M_0, j_0, J_star, I_star, flux
@@ -94,6 +98,12 @@ Mdot_0 = (alpha -1.0)*M_0/t_0
 J_star = 1.d50  ! g cm^2/s, initial angular momentum of the star
 
 M_star = 1.0 * M_sun	      ! initial mass of the WD in "g"
+
+T_0 = 1e8 ! K, initial temp for an isothermal star
+
+L_0 = C*M*T_i**(7./2)/L_sun ! initial luminosity in terms of L_sun
+
+
 
 !--------------------------------
 ! parameters below are determined from the given above
@@ -123,6 +133,10 @@ W_kep = SQRT(G*M_star/R_in**3) ! kepler angular velocity at the inner radius
 w_s = Omega / W_kep       !fastness parameter
 
 f = R_in / R_LC
+
+! radiative parameters
+
+
 
 
 jdot = 1.d0 - w_s/w_eq
