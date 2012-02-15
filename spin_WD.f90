@@ -20,6 +20,7 @@ G = 6.67259d-8,        &   ! gravitational constant	(dyne.cm^2/s)
 M_sun = 1.989d33,      &   ! mass of the Sun   ( g )
 R_sun = 6.96d10,       &   ! radius of the Sun (cm)
 L_sun = 3.839e33,      &   ! luminosity of the Sun (erg/s)
+Temp_sun = 5777,       &   ! effective temperature of the Sun (K)
 c = 2.99792458d10,     &   ! speed of light	  (cm/s)
 k = 1.3806513d-16,     &   ! Boltzmann's constant (erg/K)
 m_p = 1.6725231d-24,   &   ! Mass of proton	  (g)
@@ -30,9 +31,7 @@ day = 8.64d4,          &   ! 1 day is 86400 seconds
 week = 7.d0*day,       &   !
 month = 30.d0*day,     &   ! convert time units to seconds
 year = 365.25d0*day,   &   !
-km = 1.d5,             &   ! km in cm's
-C = 5.75d5*3.45,       &   ! constant for Mestel cooling (erg/s/M_solar)
-mu = 1.660538d-24      &   ! atomic mass unit (g)
+km = 1.d5                  ! km in cm's
 
 end module Natural_Constants
 !***************************************************
@@ -55,7 +54,13 @@ ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
 w_eq = 0.9d0,       & ! critical fastness parameter for torque equilibrium
                         !
-inclination = PI/3.d0    ! inclination angle between the magnetic and rotation axis
+inclination = PI/3.d0,  & ! inclination angle between the magnetic and rotation axis
+			 !
+A = 17,			& ! atomic number, for a half-half CO WD
+			!
+mu_e = 2		! nucleons per charge
+
+
 	 
 end module Main_Parameters
 !*****************************************************
@@ -70,7 +75,7 @@ real(kind=double), public:: t, Omega, dt,      &
  torque_disk, torque_dip, torque,              &
  R_in, R_LC, R_co, w_s, period, jdot,          &
  R_star, L_disk, L_acc, B_star, L_0,	       &
- L, dL, T_0
+ L_star, evaporation, Temp_0, Temp_star
 
  
 real(kind=double), public:: Mdot_0, t_0, M_0, j_0, J_star, I_star, flux
@@ -99,11 +104,9 @@ J_star = 1.d50  ! g cm^2/s, initial angular momentum of the star
 
 M_star = 1.0 * M_sun	      ! initial mass of the WD in "g"
 
-T_0 = 1e8 ! K, initial temp for an isothermal star
+Temp_0 = 1e8 ! K, initial temp for an isothermal star
 
-L_0 = C*M*T_i**(7./2)/L_sun ! initial luminosity in terms of L_sun
-
-
+L_0 = 5.75d5*3.45*M_star*Temp_0**(7./2) ! initial luminosity in erg/s
 
 !--------------------------------
 ! parameters below are determined from the given above
@@ -134,16 +137,19 @@ w_s = Omega / W_kep       !fastness parameter
 
 f = R_in / R_LC
 
-! radiative parameters
-
-
-
-
 jdot = 1.d0 - w_s/w_eq
 
 torque_disk = Mdot*SQRT(G*M_star*R_in)*jdot
 
 torque_dip = - 2.d0 * mu**2 * sin(inclination)**2 * Omega**3  /(3.d0*c**3) 
+
+! radiative parameters
+
+L_star = L_0
+
+Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun ! effective temperature
+
+evaporation = - 5./7*(9.41*1.d6*year*12./A*(mu_e/2)**(4./3)*(M_star/M_sun)**(5./7) + (L_star*Mdot)/(L_sun*M_star)) ! Mestel dL/dt
 
 
 if ( f > 1.d0) then
@@ -275,7 +281,6 @@ w_s = Omega / W_kep       !fastness parameter
 
 f = R_in / R_LC
 
-
 jdot = 1.d0 - w_s/w_eq
 
 torque_disk = Mdot*SQRT(G*M_star*R_in)*jdot
@@ -328,11 +333,16 @@ IMPLICIT NONE
 
   I_star = 3.21601*1d50*(M_star/M_sun)**0.34158*(1.d0-(M_star/(1.437*M_sun))**1.2499)**1.43773 
  
+  L_star = L_star + evaporation*dt
+
   B_star = flux/R_star**2
 
   mu = 0.5*B_star*R_star**3
 
   Omega = J_star/I_star  ! angular velocity
+
+  Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun
+
 
 
 END SUBROUTINE update
