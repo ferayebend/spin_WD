@@ -48,7 +48,7 @@ M_ch = 1.435*M_sun*(2.d0/mmw)**2,    & ! Chandrasekhar mass
                      !
 alpha = 1.25d0,     &  ! power-law index of the accretion rate
 					 !
-tMAX = 1.0d8*year,	 &    ! where to stop computing in time
+tMAX = 3.d8*year,	 &    ! where to stop computing in time
 				     !
 ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
@@ -56,9 +56,7 @@ w_eq = 0.9d0,       & ! critical fastness parameter for torque equilibrium
                         !
 inclination = PI/3.d0,  & ! inclination angle between the magnetic and rotation axis
 			 !
-A = 17,			& ! atomic number, for a half-half CO WD
-			!
-mu_e = 2		! nucleons per charge
+A = 17			 ! atomic number, for a half-half CO WD
 
 
 	 
@@ -90,9 +88,9 @@ t = 0.d0
 
 dt = 1.d6 ! seconds
 
-B_star = 1.d8  ! Gauss, initial magnetic field
+B_star = 2.d8  ! Gauss, initial magnetic field
 
-M_0 = 3d-1*M_sun  ! initial mass of the disk
+M_0 = 3.d-1*M_sun  ! initial mass of the disk
 
 j_0 = 1.0d20 ! initial average specific angular momentum
 
@@ -106,7 +104,7 @@ M_star = 1.0 * M_sun	      ! initial mass of the WD in "g"
 
 Temp_0 = 1e8 ! K, initial temp for an isothermal star
 
-L_0 = 5.75d5*3.45*M_star*Temp_0**(7./2) ! initial luminosity in erg/s
+L_0 = 5.75d5*3.45*(M_star/M_sun)*Temp_0**(7./2) ! initial luminosity in erg/s
 
 !--------------------------------
 ! parameters below are determined from the given above
@@ -149,7 +147,9 @@ L_star = L_0
 
 Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun ! effective temperature
 
-evaporation = - 5./7*(9.41*1.d6*year*12./A*(mu_e/2)**(4./3)*(M_star/M_sun)**(5./7) + (L_star*Mdot)/(L_sun*M_star)) ! Mestel dL/dt
+evaporation = (L_star/L_sun)**(12.d0/7)/(-5./7*9.41d6*year*12./A*(mmw/2.d0)**(4./3)*(M_star/M_sun)**(5./7)) &
+		- 5./7*(L_star*Mdot)/(L_sun*M_star) ! Mestel dL/dt
+
 
 
 if ( f > 1.d0) then
@@ -287,6 +287,9 @@ torque_disk = Mdot*SQRT(G*M_star*R_in)*jdot
 
 torque_dip = - 2.d0 * mu**2 * sin(inclination)**2 * Omega**3  /(3.d0*c**3) 
 
+evaporation = (L_star/L_sun)**(12.d0/7)/(-5./7*9.41d6*year*12./A*(mmw/2.d0)**(4./3)*(M_star/M_sun)**(5./7)) &
+		- 5./7*(L_star*Mdot)/(L_sun*M_star) ! Mestel dL/dt
+
 
 if ( f > 1.d0) then
    torque = torque_dip 
@@ -310,12 +313,15 @@ period = 2.d0*PI / Omega
 
 L_acc = G * M_star * Mdot / R_star 
 L_disk =  0.5d0*G * M_star * Mdot / R_in
+Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun
 
-write(11,100) t/year, M_star/M_sun, J_star/1.d50, Omega, Period, I_star/1.d50, w_s, torque/1.d40, ss
+write(11,100) t/year, M_star/M_sun, J_star/1.d50, Omega, Period, I_star/1.d50,  &
+              w_s, torque/1.d40, ss, Temp_star, B_star*1.0d-6
 write(12,101) t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss  
 
 
-100 FORMAT (1x,ES12.4,2x,F8.6,2x,ES12.4,2x,F9.3,2x,F9.4,2x,F10.6,2x,F14.4,2x,F14.4,2x, I1)
+100 FORMAT (1x,ES12.4,2x,F8.6,2x,ES12.4,2x,F9.3,2x,ES12.4,2x,F10.6, &
+            2x,F14.4,2x,F14.4,2x, I1, 2x, F9.2,2x, F8.2)
 101 FORMAT (6(2x,ES12.4),2x, I1)
 RETURN
 END SUBROUTINE data_write
@@ -333,15 +339,13 @@ IMPLICIT NONE
 
   I_star = 3.21601*1d50*(M_star/M_sun)**0.34158*(1.d0-(M_star/(1.437*M_sun))**1.2499)**1.43773 
  
-  L_star = L_star + evaporation*dt
+  L_star = L_star + evaporation*L_sun*dt
 
   B_star = flux/R_star**2
 
   mu = 0.5*B_star*R_star**3
 
   Omega = J_star/I_star  ! angular velocity
-
-  Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun
 
 
 
