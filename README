@@ -1,0 +1,9 @@
+some parameters are inputted via file. the input order and their physical dimensions are as follows:
+
+data.in
+---------------------------------
+B_star		gauss
+Ms_in		M_sun
+Js_in		g cm^2/s
+Mdisk_in  	M_sun
+Jdisk_in	g cm^2/s

@@ -73,7 +73,8 @@ real(kind=double), public:: t, Omega, dt,      &
  torque_disk, torque_dip, torque,              &
  R_in, R_LC, R_co, w_s, period, jdot,          &
  R_star, L_disk, L_acc, B_star, L_0,	       &
- L_star, evaporation, Temp_0, Temp_star
+ L_star, evaporation, Temp_0, Temp_star,       &
+ Ms_in, Mdisk_in, Js_in, Jdisk_in, B_in
 
  
 real(kind=double), public:: Mdot_0, t_0, M_0, j_0, J_star, I_star, flux
@@ -84,23 +85,28 @@ contains
 !***************************************************
 SUBROUTINE initialize
 
+OPEN (unit=21, file="data.in",status="old")
+READ (21, *) B_in, Ms_in, Js_in, Mdisk_in, Jdisk_in
+WRITE (*, 103)  B_in, Ms_in, Js_in, Mdisk_in, Jdisk_in
+103 FORMAT (5(2x,ES12.4))
+
 t = 0.d0
 
 dt = 1.d6 ! seconds
 
-B_star = 2.d8  ! Gauss, initial magnetic field
+B_star = B_in  ! Gauss, initial magnetic field
 
-M_0 = 3.d-1*M_sun  ! initial mass of the disk
+M_0 = Mdisk_in*M_sun  ! initial mass of the disk
 
-j_0 = 1.0d20 ! initial average specific angular momentum
+j_0 = Jdisk_in/M_0 ! initial average specific angular momentum
 
 t_0 = 2.150*year*(j_0/1d20)**(7.0/3.0)*(M_0/(1d-4*M_sun))**(-2.0/3.0) ! from the disk model
 
 Mdot_0 = (alpha -1.0)*M_0/t_0
 
-J_star = 1.d50  ! g cm^2/s, initial angular momentum of the star
+J_star = Js_in  ! g cm^2/s, initial angular momentum of the star
 
-M_star = 1.0 * M_sun	      ! initial mass of the WD in "g"
+M_star = Ms_in * M_sun	      ! initial mass of the WD in "g"
 
 Temp_0 = 1e8 ! K, initial temp for an isothermal star
 
