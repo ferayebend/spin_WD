@@ -48,7 +48,7 @@ M_ch = 1.435*M_sun*(2.d0/mmw)**2,    & ! Chandrasekhar mass
                      !
 alpha = 1.25d0,     &  ! power-law index of the accretion rate
 					 !
-tMAX = 3.d8*year,	 &    ! where to stop computing in time
+tMAX = 6.d8*year,	 &    ! where to stop computing in time
 				     !
 ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
@@ -92,7 +92,7 @@ WRITE (*, 103)  B_in, Ms_in, Js_in, Mdisk_in, Jdisk_in
 
 t = 0.d0
 
-dt = 1.d6 ! seconds
+dt = 1.d5 ! seconds
 
 B_star = B_in  ! Gauss, initial magnetic field
 
@@ -327,7 +327,7 @@ write(12,101) t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss
 
 
 100 FORMAT (1x,ES12.4,2x,F8.6,2x,ES12.4,2x,F9.3,2x,ES12.4,2x,F10.6, &
-            2x,F14.4,2x,F14.4,2x, I1, 2x, F9.2,2x, F8.2)
+            2x,F14.4,2x,ES12.4,2x, I1, 2x, F9.2,2x, F8.2)
 101 FORMAT (6(2x,ES12.4),2x, I1)
 RETURN
 END SUBROUTINE data_write
@@ -382,7 +382,7 @@ integer:: i
 OPEN (unit=11, file="star.out",status="replace")
 OPEN (unit=12, file="disk.out",status="replace")
 
-write(11,'(A106)') '#t/year,    M_star,     J_star/1E50,  Omega,      Period, I_star/1E50,        w_s,       torque/1E40, ss'
+write(11,'(A109)') '#t/year,    M_star,     J_star/1E50,  Omega,      Period, I_star/1E50,        w_s,       torque/1E40, ss'
 write(12,'(A80)') "#t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss"
 
 ! initialize everything
