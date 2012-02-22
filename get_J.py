@@ -5,7 +5,7 @@ from os import popen
 def loadData(inputFile):
     data = []
     for line in inputFile:
-        if line.startswith("#"):
+        if '#' in line:
             continue
         data.append([float(v) for v in line.strip().split()])
     return data
@@ -31,13 +31,13 @@ def getSphData():
     #show()
     return J_star, J_disk, mass_star, mass_disk
 
-if __name__ == '__main__':
+def runSpin(Blist):
    J_star, J_disk, M_star, M_disk = getSphData()
    print '''
 		*** Reading the out of the SPH data file *** 
 
 	 '''
-   Blist = [2e6,2e7,1e8,2e8,6e8]
+   #Blist = [2e6,2e7,1e8,2e8,6e8]
    print '''
 		*** writing the angular momentum data into data.in 
 		*** and
@@ -52,3 +52,45 @@ if __name__ == '__main__':
    	popen('mv star.out star_%1.1e.out'%B)
    	popen('mv disk.out disk_%1.1e.out'%B)
    print ''' finished '''
+
+def arrayplot(data,style):
+   if data:
+   	x = transpose(data)[0]
+   	y = transpose(data)[1]
+   	loglog(x,y,style,linewidth=1.7)
+
+def totalplot(Blist,T_final):
+   #Blist = [2e6,2e7,1e8,2e8,6e8]
+   #T_final = 30000.
+   finaldata = []
+   for B in Blist:
+	data = loadData(open('star_%1.1e.out'%B))
+   	spin = []
+   	spindown = []
+	for d in data:
+	    if d[9] > T_final and d[0] > 1.:	
+	       if d[8] == 1:
+		  spin.append([d[0],d[4]])
+  	       elif d[8] == 0:
+		  spindown.append([d[0],d[4]])
+	    elif d[9] <= T_final and d[0] > 1:
+		mass = d[1]
+		B = d[10]
+		spin_final = d[4]
+		t_final = d[0]
+		finaldata.append([mass, B, spin_final])
+		break
+	arrayplot(spin,'r')
+	arrayplot(spindown,'g')
+	xlabel('time / year',size=14)
+	ylabel('period / seconds',size=14)
+	text(t_final, spin_final,'%i MG'%B)
+   savefig('period_evo_Bs.png')
+   show()
+
+
+if __name__ == '__main__':
+   Blist = [2e6,1e7,2e7,1e8,2e8,5e8]
+   #files = []
+   #runSpin([1.e7])
+   totalplot(Blist,30000)
