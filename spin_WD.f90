@@ -92,7 +92,7 @@ WRITE (*, 103)  B_in, Ms_in, Js_in, Mdisk_in, Jdisk_in
 
 t = 0.d0
 
-dt = 1.d5 ! seconds
+dt = 1.d-5 ! seconds
 
 B_star = B_in  ! Gauss, initial magnetic field
 
@@ -213,7 +213,7 @@ real(kind=double),intent(out):: W_new, t_new, dt_new
 real(kind=double):: error, WTEMP1,WTEMP2, WTEMP3, tTEMP1, tTEMP2, tTEMP3
 
 ! Parameters relevant to the numerical procedure
-real(kind=double), parameter:: delta=1.0d-8 ! desired accuracy
+real(kind=double), parameter:: delta=1.0d-12 ! desired accuracy
 real(kind=double), parameter:: safety=0.7  ! safety factor
 
 ! Take two successive steps
@@ -224,27 +224,27 @@ real(kind=double), parameter:: safety=0.7  ! safety factor
  call RK4(W,t,2.d0*dt, WTEMP3, tTEMP3)
 
  ! Find the relative error
-error = ABS((WTEMP3-WTEMP2)/WTEMP2)
-
+ !error = ABS((WTEMP3-WTEMP2)/WTEMP2)
+ error = max(ABS((WTEMP3-WTEMP2)/WTEMP2),1.d-4*delta)
 
 ! if we are making a small error  (error < delta)
 ! then make the time steps larger
 
 if (error <= delta) then	
    	 
-	  dt_new = safety*dt*ABS(delta/(error))**0.2
+      dt_new = safety*dt*ABS(delta/(error))**0.2
 ! ... but not more than 5 times
-      dt_new = min(dt_new, 5.d0*dt)
-			
+      dt_new = min(dt_new, 5.d0*dt)	
 
 ! ...but if we are making a big error  (error > delta)
 ! then make the time step smaller
 
-else						
+else
+						
    dt_new = safety*dt*ABS(delta/(error))**0.25
     ! ... but not more than 10 times
    dt_new = max(dt_new,0.1d0*dt)	  
-			   
+		   
 end if
 
 ! do not let the time-step be larger than 1/500th of tMAX
@@ -401,11 +401,11 @@ time: do
        exit time  		 
   end if 
 
-  if (M_star > 0.95*M_ch) then
+  if (M_star > 0.97*M_ch) then
     print*, "M_s reached M_ch"
 	exit time
   end if
-
+ 
   call RK4adaptive(Omega,t,dt, Omega,t,dt)	! takes the values one step ahead 
 
 
