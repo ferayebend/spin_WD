@@ -14,9 +14,9 @@ def transpose(data):
         return [[data[j][i] for j in range(len(data))] for i in range(len(data[0]))]
 
 def getSphData():
-    data = transpose(loadData(open('./datums.txt')))
+    data = transpose(loadData(open('./data/datums.txt')))
     mass_star = 1.1	#need to input these
-    mass_disk = 0.3	#need to input these
+    mass_disk = 0.28	#need to input these
     J_star = 0.
     J_disk = 0.
     J_total = 0.
@@ -37,7 +37,7 @@ def runSpin(Blist):
 		*** Reading the out of the SPH data file *** 
 
 	 '''
-   #Blist = [2e6,2e7,1e8,2e8,6e8]
+
    print '''
 		*** writing the angular momentum data into data.in 
 		*** and
@@ -63,6 +63,7 @@ def totalplot(Blist,T_final):
    #Blist = [2e6,2e7,1e8,2e8,6e8]
    #T_final = 30000.
    finaldata = []
+   final = open('finaldata.txt','w')
    for B in Blist:
 	data = loadData(open('star_%1.1e.out'%B))
    	spin = []
@@ -79,18 +80,19 @@ def totalplot(Blist,T_final):
 		spin_final = d[4]
 		t_final = d[0]
 		finaldata.append([mass, B, spin_final])
+		final.write('%3.3f %3.2f %3.3f \n'%(mass, log10(B*1e6), log10(spin_final)))
 		break
 	arrayplot(spin,'r')
 	arrayplot(spindown,'g')
 	xlabel('time / year',size=14)
 	ylabel('period / seconds',size=14)
-	text(t_final, spin_final,'%i MG'%B)
+	text(t_final, spin_final,'%4.1f MG'%B)
    savefig('period_evo_Bs.png')
    show()
 
 
 if __name__ == '__main__':
-   Blist = [2e6,1e7,2e7,1e8,2e8,5e8]
+   Blist = [3.5e5,6e5,1.2e6,1e7,2e7,8e7]
    #files = []
-   #runSpin([1.e7])
+   runSpin(Blist)
    totalplot(Blist,30000)
