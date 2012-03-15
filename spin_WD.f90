@@ -22,7 +22,8 @@ R_sun = 6.96d10,       &   ! radius of the Sun (cm)
 L_sun = 3.839e33,      &   ! luminosity of the Sun (erg/s)
 Temp_sun = 5777,       &   ! effective temperature of the Sun (K)
 c = 2.99792458d10,     &   ! speed of light	  (cm/s)
-k = 1.3806513d-16,     &   ! Boltzmann's constant (erg/K)
+k_B = 1.3806513d-16,     &   ! Boltzmann's constant (erg/K)
+planck = 6.6252d-27,    &   ! Plancks constant
 m_p = 1.6725231d-24,   &   ! Mass of proton	  (g)
 SB = 5.670399d-5,      &   ! Stefan-Boltzmann constant	(erg/cm^2.K^4.s)
 minute = 60.d0,        &
@@ -31,6 +32,10 @@ day = 8.64d4,          &   ! 1 day is 86400 seconds
 week = 7.d0*day,       &   !
 month = 30.d0*day,     &   ! convert time units to seconds
 year = 365.25d0*day,   &   !
+ly = c*year,           &
+eV = 1.602177d-12,     &
+pc = 3.26d0*ly,        &
+kpc = pc*1.d3,         &
 km = 1.d5                  ! km in cm's
 
 end module Natural_Constants
@@ -49,6 +54,8 @@ M_ch = 1.435*M_sun*(2.d0/mmw)**2,    & ! Chandrasekhar mass
 alpha = 1.25d0,     &  ! power-law index of the accretion rate
 					 !
 tMAX = 6.d8*year,	 &    ! where to stop computing in time
+				 	!
+distance = 30d0*pc,   &
 				     !
 ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
@@ -56,10 +63,24 @@ w_eq = 0.9d0,       & ! critical fastness parameter for torque equilibrium
                         !
 inclination = PI/3.d0,  & ! inclination angle between the magnetic and rotation axis
 			 !
-A = 17			 ! atomic number, for a half-half CO WD
+A = 17,			& ! atomic number, for a half-half CO WD
+			!
+v_min = 1.0d10,      &  ! minimum frequency (for spectrum calculation) 
+!
+lambda_max = c / v_min,    &  ! maximum wavelength
+!
+kT_min = planck * v_min
 
+integer, parameter, public::      &
+order = 10,                        & ! then v_max = v_min*10^10
+iMAX = 300   ! at how many logarithmically equal points the spectrum is calculated.
 
-	 
+integer, parameter, public:: n_snap=nint(log10(tMAX/year))
+! if tMAX = 10^4 years then n_snap=4 
+! and there will be 4 snapshots taken at t=10, t=100, t=10^3, t=10^4 years
+
+real(kind=double), public, dimension(1:n_snap):: t_snap
+
 end module Main_Parameters
 !*****************************************************
 module subroutines_and_functions
@@ -74,16 +95,135 @@ real(kind=double), public:: t, Omega, dt,      &
  R_in, R_LC, R_co, w_s, period, jdot,          &
  R_star, L_disk, L_acc, B_star, L_0,	       &
  L_star, evaporation, Temp_0, Temp_star,       &
- Ms_in, Mdisk_in, Js_in, Jdisk_in, B_in
+ Ms_in, Mdisk_in, Js_in, Jdisk_in, B_in,       &
+ v, T_s
 
  
-real(kind=double), public:: Mdot_0, t_0, M_0, j_0, J_star, I_star, flux
+real(kind=double), public:: Mdot_0, t_0, M_0, j_0,r_0, J_star, I_star, flux
  
-integer, public:: ss
+integer, public:: ss, snap
 
 contains
 !***************************************************
+!*******************************************
+!************************************
+subroutine simpson(a,b,func,integral)
+!use Kind_Types
+implicit none
+integer, parameter:: n=400
+integer:: i
+real(kind=double), intent(in):: a,b
+real(kind=double), intent(out)::integral
+real(kind=double):: dx
+real(kind=double), dimension(0:n):: c, x, y
+real(kind=double), external :: func
+
+! calculate the step, coefficients of formula
+
+    dx = (b-a)/dble(n)
+    c(0) = dx/3.d0
+    do i = 1, n/2
+        c(2*i-1) = (4.d0/3.d0)*dx
+        c(2*i) = (2.d0/3.d0)*dx
+    end do
+    c(n) = c(0)
+    integral = 0
+
+! calculate the interpolate points and value on them
+
+    do i = 0, n
+        x(i) = a + i*dx
+        y(i) = func(x(i))
+    end do
+
+! calculate the approximate integral
+
+    do i = 0, n
+        integral = integral + c(i)*y(i)
+    end do
+
+end subroutine simpson
+
+!*********************************************
+real(kind=double) function planck_dist(x)
+!use Natural_Constants
+!use Main_Parameters
+implicit none
+real(kind=double), intent(in) :: x
+real(kind=double):: Temp, hv_kT
+
+Temp = T_s*((x**(-3))*(1.d0-jdot/x**0.5))**0.25
+
+!Temp  = T_0*x**(-0.75)
+
+hv_kT = planck*v/(k_B*Temp)
+
+    if ( hv_kT <1.d-3) then
+
+	    planck_dist =  x / hv_kT
+
+    else if ( hv_kT > 12.d0 ) then
+
+       planck_dist = x * dexp(-hv_kT)
+
+	else
+
+	     planck_dist = x / ( dexp(hv_kT) - 1.d0)
+
+	end if
+
+end function planck_dist
+!********************************
+subroutine spectrum
+implicit none
+real(kind=double):: res, constant, a, b, base, Fv, R_out
+integer:: i
+
+write(13,'(A9,I1,1x,A4)') "# t = 10^", nint(log10(t/year)), "year"
+
+T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25
+
+R_out = r_0 * (1.d0 + t/t_0)**0.5 ! for bound-free opacity
+
+constant = 4.d0*pi*planck*cos(inclination)*(R_in/distance)**2/c**2
+
+base = 10.d0**(dble(order)/dble(iMAX))
+
+
+a = 1.d0
+b = R_out/R_in
+
+v = v_min
+
+do i=1, imax
+
+     
+     call simpson(a,b,planck_dist,res)
+	 
+
+     Fv = res*constant*v**3
+
+     write (unit=13,fmt=109) c/v, planck*v/eV, Fv, v*Fv   
+	 ! note v*Fv = lambda F_lambda
+
+     v = v_min*base**i
+
+	 if (dlog10(v*Fv) < -40) then
+	  exit
+     end if
+
+end do
+
+  write(13,*) ""
+109 FORMAT (1x, ES14.5, 2x, ES14.5, 2x, ES14.5, 2x, ES14.5)
+end subroutine spectrum
+!***************************************************
+!***************************************************
 SUBROUTINE initialize
+real(kind=double):: Sigma_0, C_0, nu_0, mmw, alpha_SS, kappa_0
+mmw = 0.625
+alpha_SS = 0.1 ! Shakura-Sunyaev alpha parameter
+kappa_0 = 4.d25 ! *Z*(1+X) for Z metal and X hydrogen fraction http://arxiv.org/abs/astro-ph/0205212v1
 
 OPEN (unit=21, file="data.in",status="old")
 READ (21, *) B_in, Ms_in, Js_in, Mdisk_in, Jdisk_in
@@ -94,15 +234,13 @@ t = 0.d0
 
 dt = 1.d-5 ! seconds
 
+! input from file
+
 B_star = B_in  ! Gauss, initial magnetic field
 
 M_0 = Mdisk_in*M_sun  ! initial mass of the disk
 
 j_0 = Jdisk_in/M_0 ! initial average specific angular momentum
-
-t_0 = 2.150*year*(j_0/1d20)**(7.0/3.0)*(M_0/(1d-4*M_sun))**(-2.0/3.0) ! from the disk model
-
-Mdot_0 = (alpha -1.0)*M_0/t_0
 
 J_star = Js_in  ! g cm^2/s, initial angular momentum of the star
 
@@ -111,6 +249,26 @@ M_star = Ms_in * M_sun	      ! initial mass of the WD in "g"
 Temp_0 = 1e8 ! K, initial temp for an isothermal star
 
 L_0 = 5.75d5*3.45*(M_star/M_sun)*Temp_0**(7./2) ! initial luminosity in erg/s
+
+!
+
+r_0 = (3.3558/1.7030)**2*j_0**2/(G*M_star)  !  replace
+
+Sigma_0 = M_0 / (4.d0*pi*r_0**2*3.3558d-5)
+
+C_0 = alpha_SS**(8./7.)*(27.*kappa_0/SB)**(1./7.)    &
+      *(k_B/(mmw*m_p))**(15./14.)*(G*M_star)**(-5./14.)
+
+nu_0 = C_0*r_0**(15./14.)*Sigma_0**(3./7.)
+
+!t_0 = 2.150*year*(j_0/1d20)**(7.0/3.0)*(M_0/(1d-4*M_sun))**(-2.0/3.0) ! from the disk model
+t_0 = r_0**2/(0.75d0*nu_0)
+
+print*, r_0
+print*, Sigma_0
+
+Mdot_0 = (alpha -1.0)*M_0/t_0
+
 
 !--------------------------------
 ! parameters below are determined from the given above
@@ -155,8 +313,6 @@ Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun ! effective
 
 evaporation = (L_star/L_sun)**(12.d0/7)/(-5./7*9.41d6*year*12./A*(mmw/2.d0)**(4./3)*(M_star/M_sun)**(5./7)) &
 		- 5./7*(L_star*Mdot)/(L_sun*M_star) ! Mestel dL/dt
-
-
 
 if ( f > 1.d0) then
    torque = torque_dip 
@@ -211,6 +367,7 @@ implicit none
 real(kind=double),intent(in) :: W,t,dt
 real(kind=double),intent(out):: W_new, t_new, dt_new
 real(kind=double):: error, WTEMP1,WTEMP2, WTEMP3, tTEMP1, tTEMP2, tTEMP3
+integer:: i
 
 ! Parameters relevant to the numerical procedure
 real(kind=double), parameter:: delta=1.0d-12 ! desired accuracy
@@ -258,6 +415,18 @@ end if
    if (dt_new > tMAX - t) then         
        dt_new = 1.00001d0*(tMAX - t)  	     
    end if
+
+! do not let "t" overshoot t_snap too much
+! if "t" will be greater than the t_snap in the next step
+! make it just slightly greater than just required to reach t_snap
+
+  do i=1,n_snap
+     if (t<t_snap(i) .and. dt_new > t_snap(i) - t) then         
+         dt_new = 1.00000001d0*(t_snap(i) - t)
+	   snap=1 
+           exit
+     end if
+   end do 
 
 
 ! the final RK4 step with the new dt
@@ -381,9 +550,20 @@ integer:: i
 
 OPEN (unit=11, file="star.out",status="replace")
 OPEN (unit=12, file="disk.out",status="replace")
+OPEN (unit=13, file="spectrum.out",status="replace")
+
+write(*,'(1x,A10,I1,1x,A5)') "tMAX = 10^", nint(log10(tMAX/year)), "years"
+write(*,*) ""
+write(*,'(1x,A30)') "snapshots are to be taken at"
+    do i=1, n_snap
+        t_snap(i) = 10**(i)*year
+        write(*,'(1x,A3,I1,1x,A5)') "10^", nint(log10(t_snap(i)/year)),"years"
+    end do
+        write(*,*) ""
 
 write(11,'(A109)') '#t/year,    M_star,     J_star/1E50,  Omega,      Period, I_star/1E50,        w_s,       torque/1E40, ss'
 write(12,'(A80)') "#t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss"
+
 
 ! initialize everything
 i = 0
@@ -405,9 +585,13 @@ time: do
     print*, "M_s reached M_ch"
 	exit time
   end if
- 
-  call RK4adaptive(Omega,t,dt, Omega,t,dt)	! takes the values one step ahead 
 
+  call RK4adaptive(Omega,t,dt, Omega,t,dt)	! takes the values one step ahead 
+    
+	if (snap==1) then
+       call spectrum
+     end if
+      snap=0
 
     log_t = floor(log(t)/log(base)) 
 	            
@@ -423,8 +607,8 @@ time: do
 	i = i + 1		 ! numerates the time steps
 
 end do time      !  end the iteration
- 
-STOP  
+
+STOP
 END PROGRAM spin
 !**************************************************
 
