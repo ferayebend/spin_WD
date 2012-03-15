@@ -176,7 +176,7 @@ end function planck_dist
 !********************************
 subroutine spectrum
 implicit none
-real(kind=double):: res, constant, a, b, base, Fv, R_out
+real(kind=double):: res, constant, a, b, base, Fv, R_out, pov_inc
 integer:: i
 
 write(13,'(A9,I1,1x,A4)') "# t = 10^", nint(log10(t/year)), "year"
@@ -185,7 +185,9 @@ T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25
 
 R_out = r_0 * (1.d0 + t/t_0)**0.5 ! for bound-free opacity
 
-constant = 4.d0*pi*planck*cos(inclination)*(R_in/distance)**2/c**2
+pov_inc = 0.0*pi
+
+constant = 4.d0*pi*planck*cos(pov_inc)*(R_in/distance)**2/c**2
 
 base = 10.d0**(dble(order)/dble(iMAX))
 
@@ -555,7 +557,7 @@ OPEN (unit=13, file="spectrum.out",status="replace")
 write(*,'(1x,A10,I1,1x,A5)') "tMAX = 10^", nint(log10(tMAX/year)), "years"
 write(*,*) ""
 write(*,'(1x,A30)') "snapshots are to be taken at"
-    do i=1, n_snap
+    do i=n_snap-2, n_snap
         t_snap(i) = 10**(i)*year
         write(*,'(1x,A3,I1,1x,A5)') "10^", nint(log10(t_snap(i)/year)),"years"
     end do
@@ -588,7 +590,7 @@ time: do
 
   call RK4adaptive(Omega,t,dt, Omega,t,dt)	! takes the values one step ahead 
     
-	if (snap==1) then
+     if (snap==1) then
        call spectrum
      end if
       snap=0
