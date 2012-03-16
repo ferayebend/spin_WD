@@ -187,7 +187,7 @@ R_out = r_0 * (1.d0 + t/t_0)**0.5 ! for bound-free opacity
 
 pov_inc = 0.0*pi
 
-constant = 4.d0*pi*planck*cos(pov_inc)*(R_in/distance)**2/c**2
+constant = 4.d0*pi*planck*cos(pov_inc)*(R_in/distance)**2/c**2 ! uses disk inclination wrt pov
 
 base = 10.d0**(dble(order)/dble(iMAX))
 
@@ -222,8 +222,8 @@ end subroutine spectrum
 !***************************************************
 !***************************************************
 SUBROUTINE initialize
-real(kind=double):: Sigma_0, C_0, nu_0, mmw, alpha_SS, kappa_0
-mmw = 0.625
+real(kind=double):: Sigma_0, C_0, nu_0, mmw_disk, alpha_SS, kappa_0
+mmw_disk = 0.625
 alpha_SS = 0.1 ! Shakura-Sunyaev alpha parameter
 kappa_0 = 4.d25 ! *Z*(1+X) for Z metal and X hydrogen fraction http://arxiv.org/abs/astro-ph/0205212v1
 
@@ -259,7 +259,7 @@ r_0 = (3.3558/1.7030)**2*j_0**2/(G*M_star)  !  replace
 Sigma_0 = M_0 / (4.d0*pi*r_0**2*3.3558d-5)
 
 C_0 = alpha_SS**(8./7.)*(27.*kappa_0/SB)**(1./7.)    &
-      *(k_B/(mmw*m_p))**(15./14.)*(G*M_star)**(-5./14.)
+      *(k_B/(mmw_disk*m_p))**(15./14.)*(G*M_star)**(-5./14.)
 
 nu_0 = C_0*r_0**(15./14.)*Sigma_0**(3./7.)
 
@@ -493,12 +493,12 @@ L_disk =  0.5d0*G * M_star * Mdot / R_in
 Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun
 
 write(11,100) t/year, M_star/M_sun, J_star/1.d50, Omega, Period, I_star/1.d50,  &
-              w_s, torque/1.d40, ss, Temp_star, B_star*1.0d-6
+              w_s, torque/1.d40, ss, Temp_star, R_star/R_sun!, B_star*1.0d-6
 write(12,101) t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss  
 
 
 100 FORMAT (1x,ES12.4,2x,F8.6,2x,ES12.4,2x,F9.3,2x,ES12.4,2x,F10.6, &
-            2x,F14.4,2x,ES12.4,2x, I1, 2x, F9.2,2x, F8.2)
+            2x,F14.4,2x,ES12.4,2x, I1, 2x, F9.2,2x, ES12.4)
 101 FORMAT (6(2x,ES12.4),2x, I1)
 RETURN
 END SUBROUTINE data_write
