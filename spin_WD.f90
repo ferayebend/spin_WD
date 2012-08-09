@@ -53,7 +53,7 @@ M_ch = 1.435*M_sun*(2.d0/mmw)**2,    & ! Chandrasekhar mass
                      !
 alpha = 1.25d0,     &  ! power-law index of the accretion rate
 					 !
-tMAX = 6.d8*year,	 &    ! where to stop computing in time
+tMAX = 1.d9*year,	 &    ! where to stop computing in time
 				 	!
 distance = 30d0*pc,   &
 				     !
@@ -61,7 +61,7 @@ ksi = 1.0d0,        &  ! R_m = ksi * R_A
                      !
 w_eq = 0.9d0,       & ! critical fastness parameter for torque equilibrium
                         !
-inclination = PI/3.d0,  & ! inclination angle between the magnetic and rotation axis
+inclination = PI/6.d0,  & ! inclination angle between the magnetic and rotation axis
 			 !
 A = 17,			& ! atomic number, for a half-half CO WD
 			!
@@ -75,7 +75,11 @@ integer, parameter, public::      &
 order = 10,                        & ! then v_max = v_min*10^10
 iMAX = 300   ! at how many logarithmically equal points the spectrum is calculated.
 
-integer, parameter, public:: n_snap=nint(log10(tMAX/year))
+integer, parameter, public:: n_snap = 6 
+! need to be even all the time
+! if tMAX = 10^8 years then t_snap stars from 10^(8-n_snap/2)
+! 
+! eskiden n_snap=nint(log10(tMAX/year))
 ! if tMAX = 10^4 years then n_snap=4 
 ! and there will be 4 snapshots taken at t=10, t=100, t=10^3, t=10^4 years
 
@@ -96,12 +100,12 @@ real(kind=double), public:: t, Omega, dt,      &
  R_star, L_disk, L_acc, B_star, L_0,	       &
  L_star, evaporation, Temp_0, Temp_star,       &
  Ms_in, Mdisk_in, Js_in, Jdisk_in, B_in,       &
- v, T_s
+ v, T_p, T_s, T_disk_ch, W_kep_star, x_d
 
  
 real(kind=double), public:: Mdot_0, t_0, M_0, j_0,r_0, J_star, I_star, flux
  
-integer, public:: ss, snap
+integer, public:: ss, snap, shut_off
 
 contains
 !***************************************************
@@ -179,18 +183,17 @@ implicit none
 real(kind=double):: res, constant, a, b, base, Fv, R_out, pov_inc
 integer:: i
 
-write(13,'(A9,I1,1x,A4)') "# t = 10^", nint(log10(t/year)), "year"
-
-T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25
+!T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25
 
 R_out = r_0 * (1.d0 + t/t_0)**0.5 ! for bound-free opacity
 
-pov_inc = 0.0*pi
+pov_inc = 0.0*pi  ! looking at the disk face-on
 
 constant = 4.d0*pi*planck*cos(pov_inc)*(R_in/distance)**2/c**2 ! uses disk inclination wrt pov
 
 base = 10.d0**(dble(order)/dble(iMAX))
 
+write(13,'(A9,F6.2,1x,A6,F7.2,1x,A13)') "# t = 10^", log10(t/year), "year  ", T_s, "K temperature"
 
 a = 1.d0
 b = R_out/R_in
@@ -205,7 +208,7 @@ do i=1, imax
 
      Fv = res*constant*v**3
 
-     write (unit=13,fmt=109) c/v, planck*v/eV, Fv, v*Fv   
+     write (unit=13,fmt=109) c/v, planck*v/eV, Fv, v*Fv  
 	 ! note v*Fv = lambda F_lambda
 
      v = v_min*base**i
@@ -217,13 +220,13 @@ do i=1, imax
 end do
 
   write(13,*) ""
-109 FORMAT (1x, ES14.5, 2x, ES14.5, 2x, ES14.5, 2x, ES14.5)
+109 FORMAT (1x, ES14.5, 2x, ES14.5, 2x, ES14.5, 2x, ES14.5, 2x, F7.2)
 end subroutine spectrum
 !***************************************************
 !***************************************************
 SUBROUTINE initialize
 real(kind=double):: Sigma_0, C_0, nu_0, mmw_disk, alpha_SS, kappa_0
-mmw_disk = 0.625
+mmw_disk = 2.0 ! for metallic disk. used to be 0.625
 alpha_SS = 0.1 ! Shakura-Sunyaev alpha parameter
 kappa_0 = 4.d25 ! *Z*(1+X) for Z metal and X hydrogen fraction http://arxiv.org/abs/astro-ph/0205212v1
 
@@ -266,8 +269,8 @@ nu_0 = C_0*r_0**(15./14.)*Sigma_0**(3./7.)
 !t_0 = 2.150*year*(j_0/1d20)**(7.0/3.0)*(M_0/(1d-4*M_sun))**(-2.0/3.0) ! from the disk model
 t_0 = r_0**2/(0.75d0*nu_0)
 
-print*, r_0
-print*, Sigma_0
+print*, t_0
+!print*, Sigma_0
 
 Mdot_0 = (alpha -1.0)*M_0/t_0
 
@@ -297,6 +300,8 @@ R_in = max(R_star,R_A) ! if R_star>R_A then the inner radius of the disk is R_st
 
 W_kep = SQRT(G*M_star/R_in**3) ! kepler angular velocity at the inner radius
 
+W_kep_star = SQRT(G*M_star/R_star**3) ! kepler angular velocity at the surface of the star
+
 w_s = Omega / W_kep       !fastness parameter
 
 f = R_in / R_LC
@@ -316,6 +321,14 @@ Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun ! effective
 evaporation = (L_star/L_sun)**(12.d0/7)/(-5./7*9.41d6*year*12./A*(mmw/2.d0)**(4./3)*(M_star/M_sun)**(5./7)) &
 		- 5./7*(L_star*Mdot)/(L_sun*M_star) ! Mestel dL/dt
 
+T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25 ! temp at inner disk radius
+
+T_p = 1000  ! K MRI shut off temperature
+
+T_disk_ch = T_s
+
+shut_off = 0 ! MRI shutoff 
+
 if ( f > 1.d0) then
    torque = torque_dip 
    ss = 0
@@ -326,6 +339,37 @@ end if
 
 RETURN
 END SUBROUTINE initialize
+
+SUBROUTINE MRI_shutoff
+real(kind=double):: Sigma_0, C_0, nu_0, mmw_disk, alpha_SS, kappa_0, Md_n, t_n
+mmw_disk = 2.0 ! for metallic disk. used to be 0.625
+alpha_SS = 0.01 ! Shakura-Sunyaev alpha parameter
+kappa_0 = 4.d25 ! *Z*(1+X) for Z metal and X hydrogen fraction http://arxiv.org/abs/astro-ph/0205212v1
+
+! changes t_0
+
+r_0 = (3.3558/1.7030)**2*j_0**2/(G*M_star)  !  replace
+
+Sigma_0 = M_0 / (4.d0*pi*r_0**2*3.3558d-5)
+
+C_0 = alpha_SS**(8./7.)*(27.*kappa_0/SB)**(1./7.)    &
+      *(k_B/(mmw_disk*m_p))**(15./14.)*(G*M_star)**(-5./14.)
+
+nu_0 = C_0*r_0**(15./14.)*Sigma_0**(3./7.)
+
+!t_0 = 2.150*year*(j_0/1d20)**(7.0/3.0)*(M_0/(1d-4*M_sun))**(-2.0/3.0) ! from the disk model
+t_0 = r_0**2/(0.75d0*nu_0)
+
+Mdot_0 = (alpha -1.0)*M_0/t_0
+!Md_n = Mdot_0 * (1.0 + t/t_0)**(-alpha)/(1.0 + t/t_n)**(-alpha) ! for continuity
+
+!Mdot_0 = Md_n
+
+!t_0 = t_n
+
+RETURN
+END SUBROUTINE MRI_shutoff
+
 
 !***************************************************
 ! This subroutine takes a 4th order Runge-Kutta step
@@ -454,6 +498,8 @@ R_in = max(R_star,R_A) ! if R_star>R_A then the inner radius of the disk is R_st
 
 W_kep = SQRT(G*M_star/R_in**3) ! kepler angular velocity at the inner radius
 
+W_kep_star = SQRT(G*M_star/R_star**3) ! at stellar surface
+
 w_s = Omega / W_kep       !fastness parameter
 
 f = R_in / R_LC
@@ -467,8 +513,13 @@ torque_dip = - 2.d0 * mu**2 * sin(inclination)**2 * Omega**3  /(3.d0*c**3)
 evaporation = (L_star/L_sun)**(12.d0/7)/(-5./7*9.41d6*year*12./A*(mmw/2.d0)**(4./3)*(M_star/M_sun)**(5./7)) &
 		- 5./7*(L_star*Mdot)/(L_sun*M_star) ! Mestel dL/dt
 
+x_d = 10 ! R_out/R_in ratio where MRI shuts off at T_p 
 
-if ( f > 1.d0) then
+T_s = (3.d0*G*M_star*Mdot/(8.d0*pi*R_in**3*SB))**0.25
+
+T_disk_ch = T_s*((x_d**(-3))*(1.d0-jdot/x_d**0.5))**0.25 ! disk inner radius temperature
+
+if ( f > 1.d0 .or. T_disk_ch < T_p) then ! if the inner disk temperature smaller than 1000 K
    torque = torque_dip 
    ss = 0
 else 
@@ -493,13 +544,13 @@ L_disk =  0.5d0*G * M_star * Mdot / R_in
 Temp_star = ((L_star*R_sun**2)/(L_sun*R_star**2))**(1.d0/4)*Temp_sun
 
 write(11,100) t/year, M_star/M_sun, J_star/1.d50, Omega, Period, I_star/1.d50,  &
-              w_s, torque/1.d40, ss, Temp_star, R_star/R_sun!, B_star*1.0d-6
-write(12,101) t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss  
-
+              w_s, torque/1.d40, ss, Temp_star, B_star*1.0d-6
+write(12,101) t/year, Mdot*year/M_sun, R_in/R_star, L_acc, L_disk, f, ss,       &
+	      t_0/year, Mdot_0*year/M_sun
 
 100 FORMAT (1x,ES12.4,2x,F8.6,2x,ES12.4,2x,F9.3,2x,ES12.4,2x,F10.6, &
-            2x,F14.4,2x,ES12.4,2x, I1, 2x, F9.2,2x, ES12.4)
-101 FORMAT (6(2x,ES12.4),2x, I1)
+            2x,F14.4,2x,ES12.4,2x, I1, 2x, F9.2,2x, F7.2)
+101 FORMAT (6(2x,ES12.4),2x, I1,2(2x,ES12.4))
 RETURN
 END SUBROUTINE data_write
 
@@ -545,26 +596,30 @@ implicit none
 
 ! these are to write the data in logarithmic time steps
 real(kind=single):: base=1.005   
-integer:: log_t, log_tOLD
+integer:: log_t, log_tOLD, log_tREF
 
 
 integer:: i
+
+log_tREF = nint(log10(tMAX/year))-n_snap/2
 
 OPEN (unit=11, file="star.out",status="replace")
 OPEN (unit=12, file="disk.out",status="replace")
 OPEN (unit=13, file="spectrum.out",status="replace")
 
 write(*,'(1x,A10,I1,1x,A5)') "tMAX = 10^", nint(log10(tMAX/year)), "years"
+write(*,*) log_tREf
 write(*,*) ""
 write(*,'(1x,A30)') "snapshots are to be taken at"
-    do i=n_snap-2, n_snap
-        t_snap(i) = 10**(i)*year
-        write(*,'(1x,A3,I1,1x,A5)') "10^", nint(log10(t_snap(i)/year)),"years"
+    do i= 1,n_snap/2  ! two calculations in each step
+        t_snap(2*i-1) = 10**(log_tREF+i)*year
+	t_snap(2*i) = 3*10**(log_tREF+i)*year
+        write(*,'(1x,A3,F6.2,1x,A5)') "10^", log10(t_snap(i)/year),"years"
     end do
         write(*,*) ""
 
 write(11,'(A109)') '#t/year,    M_star,     J_star/1E50,  Omega,      Period, I_star/1E50,        w_s,       torque/1E40, ss'
-write(12,'(A80)') "#t/year, Mdot, R_in/R_star, L_acc, L_disk, f, ss"
+write(12,'(A87)') "#t/year, Mdot/Msun/yr, R_in/R_star, L_acc, L_disk, f, ss, t0, Mdot0"
 
 
 ! initialize everything
@@ -587,6 +642,24 @@ time: do
     print*, "M_s reached M_ch"
 	exit time
   end if
+
+  if (Omega > W_kep_star) then
+    print*, "Star is rotating faster than breakup speed"
+	exit time
+  end if
+
+  if (T_disk_ch < T_p) then 
+    if (shut_off .eq. 0) then
+       open(unit=23, file="MRI_turnoff.out")!,status="replace")
+       123 FORMAT (F5.1,F9.3,3(2x,ES12.4))
+       write(23,123) B_star*1e-6, w_s, period, Mdot*year/M_sun, t/year
+       Mdot = 0 ! not working
+       !print*, "alpha_ss = 0.01 MRI shutoff", t/year
+       shut_off = 1
+    end if
+       !close(unit=33)
+  end if
+
 
   call RK4adaptive(Omega,t,dt, Omega,t,dt)	! takes the values one step ahead 
     
